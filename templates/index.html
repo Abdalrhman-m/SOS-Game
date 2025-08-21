@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Online SOS Game 🎲</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #1a1a2e;
+            --primary-color: #16213e;
+            --secondary-color: #0f3460;
+            --accent-color: #e94560;
+            --text-color: #dcdcdc;
+            /* Adjusted cell size for a larger board */
+            --cell-size: clamp(25px, 6.5vmin, 45px);
+        }
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Poppins', sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+        }
+        .screen { display: none; width: 100%; max-width: 500px; padding: 20px; text-align: center; }
+        .screen.active { display: block; }
+        
+        /* --- Home Screen --- */
+        #home-screen h1 { color: var(--accent-color); font-size: 3rem; }
+        .join-box { background-color: var(--primary-color); padding: 25px; border-radius: 10px; margin-top: 20px; }
+        .join-box input { width: 100%; padding: 12px; font-size: 1.5rem; text-align: center; border: 2px solid var(--secondary-color); background: #2a2a4e; color: var(--text-color); border-radius: 5px; text-transform: uppercase; letter-spacing: 4px; }
+        .button-group { display: flex; gap: 15px; margin-top: 15px; }
+        button { flex-grow: 1; padding: 15px 20px; font-size: 1rem; font-weight: 600; cursor: pointer; border: none; border-radius: 5px; background-color: var(--accent-color); color: white; transition: transform 0.2s, background-color 0.2s; }
+        button:hover { transform: translateY(-2px); }
+        #create-game-btn { background-color: var(--secondary-color); }
+        #join-game-btn:hover { background-color: #ff5a75; }
+        #create-game-btn:hover { background-color: #1f4f8f; }
+
+        /* --- Game Screen --- */
+        #game-screen { max-width: 95vw; }
+        .game-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; font-size: 1.1rem; }
+        .score-box { background: var(--primary-color); padding: 8px 15px; border-radius: 8px; }
+        .score-box.active { outline: 2px solid var(--accent-color); box-shadow: 0 0 10px var(--accent-color); }
+        #room-info { font-weight: 600; }
+        #room-code { background: #2a2a4e; padding: 2px 8px; border-radius: 4px; cursor: pointer; }
+        
+        #game-board-container {
+            position: relative;
+            width: fit-content;
+            margin: auto;
+        }
+
+        #game-board {
+            display: grid;
+            border: 3px solid var(--secondary-color);
+            background-color: var(--secondary-color);
+            gap: 3px;
+        }
+        .cell {
+            width: var(--cell-size);
+            height: var(--cell-size);
+            background-color: var(--primary-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: calc(var(--cell-size) * 0.6);
+            font-weight: bold;
+            cursor: pointer;
+            user-select: none;
+            transition: background-color 0.2s;
+        }
+        .cell:not(.filled):hover { background-color: var(--secondary-color); }
+        .cell.filled { cursor: not-allowed; }
+        .cell.sos-line { background-color: var(--accent-color) !important; color: white; animation: pulse 0.6s; }
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+        
+        .game-footer { margin-top: 15px; font-size: 1.2rem; font-weight: 600; height: 30px; }
+
+        /* --- NEW LETTER POP-UP --- */
+        #letter-popup {
+            position: absolute;
+            display: flex;
+            visibility: hidden;
+            opacity: 0;
+            width: calc(var(--cell-size) * 2.2);
+            height: calc(var(--cell-size) * 1.1);
+            background-color: #2a2a4e;
+            border: 2px solid var(--accent-color);
+            border-radius: 8px;
+            z-index: 10;
+            transform: translate(-50%, -50%) scale(0.8);
+            transition: opacity 0.2s, transform 0.2s;
+            padding: 5px;
+            gap: 5px;
+        }
+        #letter-popup.visible {
+            visibility: visible;
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+        }
+        #letter-popup button {
+            font-size: calc(var(--cell-size) * 0.5);
+            font-weight: 700;
+        }
+
+        /* --- Notifications --- */
+        #notification-area { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background-color: rgba(0,0,0,0.8); color: white; padding: 12px 25px; border-radius: 20px; z-index: 1000; opacity: 0; transition: opacity 0.5s, top 0.5s; }
+        #notification-area.show { opacity: 1; top: 30px; }
+    </style>
+</head>
+<body>
+    <div id="home-screen" class="screen active">
+        <h1>SOS Online</h1>
+        <div class="join-box">
+            <input type="text" id="room-input" placeholder="Enter Room Code" maxlength="4">
+            <div class="button-group">
+                <button id="join-game-btn">Join Game</button>
+                <button id="create-game-btn">Create New Game</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="game-screen" class="screen">
+        <div class="game-header">
+            <div id="score1-box" class="score-box">P1: <span id="score1">0</span></div>
+            <div id="room-info">Room: <span id="room-code"></span></div>
+            <div id="score2-box" class="score-box">P2: <span id="score2">0</span></div>
+        </div>
+        <div id="game-board-container">
+            <div id="game-board"></div>
+            <div id="letter-popup">
+                <button data-letter="S">S</button>
+                <button data-letter="O">O</button>
+            </div>
+        </div>
+        <div class="game-footer">
+            <div id="turn-indicator">Waiting for opponent...</div>
+        </div>
+    </div>
+
+    <div id="notification-area"></div>
+    
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script>
+        const socket = io();
+
+        const screens = { home: document.getElementById('home-screen'), game: document.getElementById('game-screen') };
+        const roomInput = document.getElementById('room-input');
+        const createGameBtn = document.getElementById('create-game-btn');
+        const joinGameBtn = document.getElementById('join-game-btn');
+        const boardElement = document.getElementById('game-board');
+        const score1El = document.getElementById('score1'), score2El = document.getElementById('score2');
+        const score1Box = document.getElementById('score1-box'), score2Box = document.getElementById('score2-box');
+        const turnIndicator = document.getElementById('turn-indicator');
+        const roomCodeEl = document.getElementById('room-code');
+        const notificationArea = document.getElementById('notification-area');
+        const letterPopup = document.getElementById('letter-popup');
+
+        let currentRoom = null;
+        let myPlayerId = null;
+
+        // --- Event Listeners (Client -> Server) ---
+        createGameBtn.addEventListener('click', () => socket.emit('create_game'));
+        joinGameBtn.addEventListener('click', () => {
+            if (roomInput.value) socket.emit('join_game', { room_id: roomInput.value });
+        });
+        roomInput.addEventListener('input', (e) => e.target.value = e.target.value.toUpperCase());
+        roomCodeEl.addEventListener('click', () => {
+            navigator.clipboard.writeText(currentRoom).then(() => showNotification(`Room code ${currentRoom} copied!`));
+        });
+
+        // --- Event Handlers (Server -> Client) ---
+        socket.on('update_game', (state) => {
+            if (!currentRoom) switchToScreen('game');
+            currentRoom = state.room_id;
+            myPlayerId = state.your_player_id;
+            updateUI(state);
+        });
+        socket.on('error', (data) => showNotification(data.message, 'error'));
+        socket.on('notification', (data) => showNotification(data.message));
+        
+        // --- UI Functions ---
+        function switchToScreen(screenName) {
+            Object.values(screens).forEach(s => s.classList.remove('active'));
+            screens[screenName].classList.add('active');
+        }
+
+        function updateUI(state) {
+            score1El.textContent = state.scores['Player 1'];
+            score2El.textContent = state.scores['Player 2'];
+            roomCodeEl.textContent = state.room_id;
+
+            score1Box.classList.remove('active');
+            score2Box.classList.remove('active');
+            if (state.game_over) {
+                turnIndicator.textContent = state.winner === 'Draw' ? "It's a Draw!" : `${state.winner} Wins!`;
+            } else if (state.players_connected < 2) {
+                 turnIndicator.textContent = "Waiting for opponent...";
+            } else {
+                turnIndicator.textContent = state.turn === myPlayerId ? "Your Turn" : "Opponent's Turn";
+                if (state.turn === 'Player 1') score1Box.classList.add('active');
+                if (state.turn === 'Player 2') score2Box.classList.add('active');
+            }
+            renderBoard(state.board_size, state.board, state.last_sos_lines);
+        }
+
+        function renderBoard(size, board, sosLines) {
+            boardElement.innerHTML = '';
+            boardElement.style.gridTemplateColumns = `repeat(${size}, var(--cell-size))`;
+            const flatSosCoords = sosLines.flat().map(coord => `${coord[0]}-${coord[1]}`);
+            
+            for (let r = 0; r < size; r++) {
+                for (let c = 0; c < size; c++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    cell.dataset.row = r;
+                    cell.dataset.col = c;
+                    
+                    if (board[r][c]) {
+                        cell.textContent = board[r][c];
+                        cell.classList.add('filled');
+                    } else {
+                        cell.addEventListener('click', handleCellClick);
+                    }
+                    if (flatSosCoords.includes(`${r}-${c}`)) cell.classList.add('sos-line');
+                    boardElement.appendChild(cell);
+                }
+            }
+        }
+        
+        function handleCellClick(event) {
+            const cell = event.target;
+            const row = cell.dataset.row;
+            const col = cell.dataset.col;
+
+            // Position and show the pop-up
+            const cellRect = cell.getBoundingClientRect();
+            const boardRect = boardElement.getBoundingClientRect();
+            letterPopup.style.left = `${cellRect.left - boardRect.left + cellRect.width / 2}px`;
+            letterPopup.style.top = `${cellRect.top - boardRect.top + cellRect.height / 2}px`;
+            
+            letterPopup.dataset.row = row;
+            letterPopup.dataset.col = col;
+            letterPopup.classList.add('visible');
+        }
+        
+        letterPopup.addEventListener('click', (event) => {
+            if (event.target.tagName === 'BUTTON') {
+                const letter = event.target.dataset.letter;
+                const row = parseInt(letterPopup.dataset.row);
+                const col = parseInt(letterPopup.dataset.col);
+
+                socket.emit('make_move', { room_id: currentRoom, row, col, letter });
+                letterPopup.classList.remove('visible');
+            }
+        });
+
+        // Hide pop-up if clicking outside
+        document.addEventListener('click', (event) => {
+            if (!boardElement.contains(event.target) && letterPopup.classList.contains('visible')) {
+                letterPopup.classList.remove('visible');
+            }
+        });
+
+        let notificationTimeout;
+        function showNotification(message, type = 'info') {
+            notificationArea.textContent = message;
+            notificationArea.style.backgroundColor = type === 'error' ? 'var(--accent-color)' : '#333';
+            notificationArea.classList.add('show');
+            clearTimeout(notificationTimeout);
+            notificationTimeout = setTimeout(() => notificationArea.classList.remove('show'), 3000);
+        }
+    </script>
+</body>
+</html>
